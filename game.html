@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>CHROMA SNAP - Original</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;touch-action:none}
+body{background:#0a0a0f;height:100vh;display:flex;justify-content:center;align-items:center;font-family:system-ui,sans-serif;overflow:hidden}
+#wrap{position:relative;width:100%;max-width:420px;height:100vh;max-height:880px;background:radial-gradient(600px at 50% 40%, #1a1a2e 0%, #0a0a0f 75%);overflow:hidden}
+canvas{display:block;width:100%;height:100%}
+#ui{position:absolute;inset:0;pointer-events:none}
+#score{position:absolute;top:24px;width:100%;text-align:center;font-size:64px;font-weight:900;color:#fff;letter-spacing:-3px}
+#best{position:absolute;top:95px;width:100%;text-align:center;font-size:11px;letter-spacing:4px;opacity:0.4;color:#fff}
+#center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;width:90%;pointer-events:auto}
+h1{font-size:50px;font-weight:900;line-height:0.9;color:#fff} h1 span{background:linear-gradient(90deg,#ff2e9a,#7a5cff,#00f0ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+p{color:#777;margin:12px 0 20px;font-size:14px;line-height:1.4}
+.btn{background:#fff;color:#000;border:0;padding:18px 40px;border-radius:999px;font-weight:900;font-size:18px;cursor:pointer}
+#msg{position:absolute;top:40%;width:100%;text-align:center;font-size:36px;font-weight:900;opacity:0;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="wrap">
+<canvas id="c"></canvas>
+<div id="ui">
+<div id="score">0</div>
+<div id="best">BEST 0</div>
+<div id="msg"></div>
+<div id="center">
+<h1>CHROMA<br><span>SNAP</span></h1>
+<p>ORIGINAL 2026<br>Ball ka color dekho<br>Wheel ka color TAP karke match karo<br>1 sec ka game, 100 baar kheloge</p>
+<button class="btn" id="play">SNAP IT</button>
+</div>
+</div>
+</div>
+<script>
+const canvas=document.getElementById('c'), ctx=canvas.getContext('2d'), wrap=document.getElementById('wrap');
+let W,H,DPR; function RS(){W=wrap.clientWidth;H=wrap.clientHeight;DPR=devicePixelRatio||1;canvas.width=W*DPR;canvas.height=H*DPR;ctx.scale(DPR,DPR);} RS(); addEventListener('resize',RS);
+const scoreEl=document.getElementById('score'), bestEl=document.getElementById('best'), centerEl=document.getElementById('center'), msgEl=document.getElementById('msg');
+let best=+localStorage.getItem('chromaBest')||0; bestEl.textContent='BEST '+best;
+
+let state='menu', score=0, wheelColor=0, ball=null, ballSpeed=2.8, rot=0, colors=['#ff2e9a','#00f0ff','#ffe600','#7a5cff'], streak=0;
+
+function newBall(){ const col=Math.floor(Math.random()*2); if(Math.random()<0.7) ball={x:W/2+ (Math.random()>0.5?1:-1)*(W/2+20), y:H/2+(Math.random()-0.5)*120, c:col, active:true}; else ball={x:W/2+(Math.random()-0.5)*100, y:-20, c:col, active:true}; }
+
+function reset(){score=0; wheelColor=0; ballSpeed=2.8; streak=0; rot=0; newBall(); scoreEl.textContent='0';}
+
+function tone(f){try{const ac=new (window.AudioContext||window.webkitAudioContext)(),o=ac.createOscillator(),g=ac.createGain();o.frequency.value=f;o.connect(g);g.connect(ac.destination);g.gain.setValueAtTime(0.25,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.25);o.start();o.stop(ac.currentTime+0.25);}catch(e){}}
+
+function update(){
+ if(state!=='playing' || !ball) return;
+ const cx=W/2, cy=H/2;
+ const dx=cx-ball.x, dy=cy-ball.y, d=Math.hypot(dx,dy);
+ const ang=Math.atan2(dy,dx);
+ ball.x+=Math.cos(ang)*ballSpeed; ball.y+=Math.sin(ang)*ballSpeed;
+ if(d<85){ // reached wheel
+  if(ball.c===wheelColor){ score++; streak++; scoreEl.textContent=score; tone(500+streak*30); if(streak>3){msgEl.textContent=['NICE!','FIRE!','GODLIKE!'][Math.min(streak-4,2)]; msgEl.style.color=colors[wheelColor]; msgEl.style.opacity=1; setTimeout(()=>msgEl.style.opacity=0,400);} ballSpeed+=0.18; newBall(); }
+  else { tone(80); state='over'; centerEl.innerHTML=`<h1>WRONG<br><span>SNAP!</span></h1><p>Score: ${score}<br>Best: ${Math.max(score,best)}</p><button class="btn" id="play">TRY AGAIN</button>`; centerEl.style.display='block'; document.getElementById('play').onclick=start; if(score>best){best=score; localStorage.setItem('chromaBest',best); bestEl.textContent='BEST '+best;} }
+ }
+ rot+=0.01+score*0.0005;
+}
+
+function draw(){
+ ctx.clearRect(0,0,W,H);
+ const cx=W/2, cy=H/2;
+ // wheel - 2 color split
+ ctx.save(); ctx.translate(cx,cy); ctx.rotate(rot);
+ ctx.fillStyle=colors[0]; ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,70,0,Math.PI); ctx.fill();
+ ctx.fillStyle=colors[1]; ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,70,Math.PI,Math.PI*2); ctx.fill();
+ ctx.restore();
+ // wheel border current
+ ctx.strokeStyle=colors[wheelColor]; ctx.lineWidth=6; ctx.shadowColor=colors[wheelColor]; ctx.shadowBlur=20; ctx.beginPath(); ctx.arc(cx,cy,76,0,Math.PI*2); ctx.stroke(); ctx.shadowBlur=0;
+ // ball
+ if(ball){ctx.shadowColor=colors[ball.c]; ctx.shadowBlur=18; ctx.fillStyle=colors[ball.c]; ctx.beginPath(); ctx.arc(ball.x,ball.y,18,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;}
+}
+
+function loop(){requestAnimationFrame(loop); update(); draw();} loop();
+
+function switchColor(){ wheelColor= wheelColor===0?1:0; tone(800); }
+
+function start(){centerEl.style.display='none'; state='playing'; reset();}
+canvas.addEventListener('pointerdown',()=>{if(state!=='playing'){start(); return;} switchColor();});
+document.getElementById('play').onclick=start;
+</script>
+</div>
+</body>
+</html>
